@@ -9,6 +9,7 @@ import (
 	"net/http"
 	mw "rest-api/internal/api/middlewares"
 	"strings"
+	"time"
 )
 
 type user struct {
@@ -101,8 +102,44 @@ func studentsHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func execsHandler(w http.ResponseWriter, r *http.Request) {
-	w.Write([]byte("Hello Execs Route"))
-	fmt.Println("Hello Execs Route")
+	switch r.Method {
+	case http.MethodGet:
+		{
+			w.Write([]byte("Hello GET Method on Execs Route"))
+		}
+	case http.MethodPost:
+		{
+			fmt.Println("Query:", r.URL.Query())
+			fmt.Println("name:", r.URL.Query().Get("name"))
+
+			// Parse form data (necessary for x-www-urlencoded)
+			err := r.ParseForm()
+			if err != nil {
+				return
+			}
+
+			fmt.Println("Form from POST methods:", r.Form)
+
+			w.Write([]byte("Hello POST Method on Execs Route"))
+		}
+	case http.MethodPut:
+		{
+			w.Write([]byte("Hello POST Method on Execs Route"))
+		}
+	case http.MethodPatch:
+		{
+			w.Write([]byte("Hello PATCH Method on Execs Route"))
+		}
+	case http.MethodDelete:
+		{
+			w.Write([]byte("Hello DELETE Method on Execs Route"))
+		}
+	default:
+		{
+			w.Write([]byte("Hello Execs Route"))
+			fmt.Println("Hello Execs Route")
+		}
+	}
 }
 
 func main() {
@@ -125,11 +162,22 @@ func main() {
 		MinVersion: tls.VersionTLS12,
 	}
 
+	rl := mw.NewRateLimiter(5, time.Minute)
+
+	hppOptions := mw.HPPOptions{
+		CheckQuery:                  true,
+		CheckBody:                   true,
+		CheckBodyOnlyForContentType: "application/x-www-form-urlencoded",
+		Whitelist:                   []string{"sortBy", "order", "name", "age", "city"},
+	}
+
+	secureMux := mw.Hpp(hppOptions)(rl.Middleware(mw.Compression(mw.ResponseTimeMiddleware(mw.SecurityHeaders(mw.Cors(mux))))))
+
 	server := &http.Server{
 		Addr: fmt.Sprintf(":%d", port),
 		// Handler:   middlewares.Cors(mux),
 		// Handler: mw.ResponseTimeMiddleware(mw.SecurityHeaders(mw.Cors(mux))),
-		Handler:   mw.Compression(mw.ResponseTimeMiddleware(mw.SecurityHeaders(mw.Cors(mux)))),
+		Handler:   secureMux,
 		TLSConfig: tlsConfig,
 	}
 
