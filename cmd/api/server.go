@@ -58,7 +58,7 @@ func main() {
 
 	// secureMux := mw.Hpp(hppOptions)(rl.Middleware(mw.Compression(mw.ResponseTimeMiddleware(mw.SecurityHeaders(mw.Cors(mux))))))
 	// secureMux := applyMiddlewares(mux, mw.Hpp(hppOptions), mw.Compression, mw.SecurityHeaders, mw.ResponseTimeMiddleware, rl.Middleware, mw.Cors)
-	secureMux := mw.SecurityHeaders(router.Router())
+	secureMux := mw.SecurityHeaders(router.MainRouter())
 
 	server := &http.Server{
 		Addr: fmt.Sprintf(":%s", port),
