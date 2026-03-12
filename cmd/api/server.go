@@ -9,6 +9,7 @@ import (
 	mw "rest-api/internal/api/middlewares"
 	"rest-api/internal/api/router"
 	"rest-api/internal/repository/sqlconnect"
+	"rest-api/pkg/utils"
 
 	"github.com/joho/godotenv"
 )
@@ -20,19 +21,17 @@ type user struct {
 }
 
 func main() {
-
 	err := godotenv.Load("cmd/api/.env")
 
 	if err != nil {
-		fmt.Println("Error loading .env file")
-		fmt.Println(err)
+		utils.ErrorHandler(err, "Error loading .env file")
 		return
 	}
 
 	db, err := sqlconnect.ConnectDb()
 
 	if err != nil {
-		fmt.Println("Error-----:", err)
+		utils.ErrorHandler(err, "Error connecting to database")
 		return
 	}
 
@@ -58,7 +57,11 @@ func main() {
 
 	// secureMux := mw.Hpp(hppOptions)(rl.Middleware(mw.Compression(mw.ResponseTimeMiddleware(mw.SecurityHeaders(mw.Cors(mux))))))
 	// secureMux := applyMiddlewares(mux, mw.Hpp(hppOptions), mw.Compression, mw.SecurityHeaders, mw.ResponseTimeMiddleware, rl.Middleware, mw.Cors)
-	secureMux := mw.SecurityHeaders(router.MainRouter())
+	router := router.MainRouter()
+	jwtMiddleware := mw.MiddlewareExcludePaths(mw.JWTMiddleware, "/execs/login", "/execs/forgot-password", "/execs/reset-password/{reset_code}/")
+
+	secureMux := jwtMiddleware(mw.SecurityHeaders(router))
+	//secureMux := mw.SecurityHeaders(router)
 
 	server := &http.Server{
 		Addr: fmt.Sprintf(":%s", port),
