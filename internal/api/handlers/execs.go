@@ -8,7 +8,9 @@ import (
 	"net/http"
 	"rest-api/internal/models"
 	"rest-api/internal/repository/sqlconnect"
+	"rest-api/pkg/utils"
 	"strconv"
+	"time"
 )
 
 func GetExecsHandler(w http.ResponseWriter, r *http.Request) {
@@ -205,4 +207,181 @@ func DeleteExecHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	json.NewEncoder(w).Encode(response)
+}
+
+func LoginHandler(w http.ResponseWriter, r *http.Request) {
+	var req models.Exec
+	// Data Validation
+	err := json.NewDecoder(r.Body).Decode(&req)
+	if err != nil {
+		http.Error(w, "Invalid Request Payload", http.StatusBadRequest)
+		return
+	}
+	defer r.Body.Close()
+
+	if req.Username == "" || req.Password == "" {
+		http.Error(w, "Username and password are required", http.StatusBadRequest)
+		return
+	}
+
+	user, err := sqlconnect.GetUserByUsername(req.Username)
+	if err != nil {
+		http.Error(w, "Invalid username or password", http.StatusForbidden)
+		return
+	}
+
+	// Check if the user is active
+	if user.InactiveStatus {
+		http.Error(w, "Account is inactive", http.StatusForbidden)
+		return
+	}
+
+	// Verify password
+	err = utils.VerifyPassword(req.Password, user.Password)
+	if err != nil {
+		http.Error(w, "Incorrect username or password", http.StatusForbidden)
+		return
+	}
+
+	// Generate JWT token
+	tokenString, err := utils.SignToken(user.ID, user.Username, user.Role)
+	if err != nil {
+		http.Error(w, "Could not create login token", http.StatusInternalServerError)
+		return
+	}
+
+	// Send token as a response or as a cookie
+	http.SetCookie(w, &http.Cookie{
+		Name:     "Bearer",
+		Value:    tokenString,
+		Path:     "/",
+		HttpOnly: true,
+		Secure:   true,
+		Expires:  time.Now().Add(24 * time.Hour),
+		SameSite: http.SameSiteStrictMode,
+	})
+
+	w.Header().Set("Content-Type", "application/json")
+
+	response := struct {
+		Token string `json:"token"`
+	}{
+		Token: tokenString,
+	}
+
+	json.NewEncoder(w).Encode(response)
+}
+
+func LogoutHandler(w http.ResponseWriter, _ *http.Request) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     "Bearer",
+		Value:    "",
+		Path:     "/",
+		HttpOnly: true,
+		Secure:   true,
+		Expires:  time.Unix(0, 0),
+		SameSite: http.SameSiteStrictMode,
+	})
+
+	w.Header().Set("Content-Type", "application/json")
+	w.Write([]byte(`{"message": "Logged out successfully"}`))
+}
+
+func UpdatePasswordHandler(w http.ResponseWriter, r *http.Request) {
+	idStr := r.PathValue("id")
+
+	userId, err := strconv.Atoi(idStr)
+	if err != nil {
+		http.Error(w, "Invalid exec ID", http.StatusBadRequest)
+		return
+	}
+
+	var req models.UpdatePasswordRequest
+	json.NewDecoder(r.Body).Decode(&req)
+	if err != nil {
+		http.Error(w, "Invalid Request Payload", http.StatusBadRequest)
+		return
+	}
+	defer r.Body.Close()
+
+	if req.CurrentPassword == "" || req.NewPassword == "" {
+		http.Error(w, "Please enter password	", http.StatusBadRequest)
+		return
+	}
+
+	token, err := sqlconnect.UpdatePasswordInDb(userId, req.CurrentPassword, req.NewPassword)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	http.SetCookie(w, &http.Cookie{
+		Name:     "Bearer",
+		Value:    token,
+		Path:     "/",
+		HttpOnly: true,
+		Secure:   true,
+		Expires:  time.Now().Add(24 * time.Hour),
+		SameSite: http.SameSiteStrictMode,
+	})
+
+	w.Header().Set("Content-Type", "application/json")
+
+	response := struct {
+		Message string `json:"message"`
+	}{
+		Message: "Password successfully updated",
+	}
+
+	json.NewEncoder(w).Encode(response)
+}
+
+func ForgotPasswordHandler(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Email string `json:"email"`
+	}
+	err := json.NewDecoder(r.Body).Decode(&req)
+	if err != nil {
+		http.Error(w, "Invalid Request Payload", http.StatusBadRequest)
+		return
+	}
+	defer r.Body.Close()
+
+	err = sqlconnect.ForgotPasswordDbHandler(req.Email)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	fmt.Fprintf(w, "Password reset link sent to %s", req.Email)
+}
+
+func ResetPasswordHandler(w http.ResponseWriter, r *http.Request) {
+	token := r.PathValue("reset_code")
+
+	type request struct {
+		NewPassword     string `json:"new_password"`
+		ConfirmPassword string `json:"confirm_password"`
+	}
+
+	var req request
+	err := json.NewDecoder(r.Body).Decode(&req)
+	if err != nil {
+		http.Error(w, "Invalid Request Payload", http.StatusBadRequest)
+		return
+	}
+	defer r.Body.Close()
+
+	if req.NewPassword != req.ConfirmPassword {
+		http.Error(w, "Passwords do not match", http.StatusBadRequest)
+		return
+	}
+
+	err = sqlconnect.ResetPasswordDbHandler(token, req.NewPassword)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	fmt.Fprintf(w, "Password reset successfully")
 }
