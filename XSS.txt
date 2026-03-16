@@ -1,0 +1,19 @@
+https://localhost:3000/execs/1/kjhg?param1='%3B%20DROP%20TABLE%20users;%20--&param2=aacute<"&lt;""<""alert"
+
+
+
+
+{
+  "input": "<a href=\"javascript:alert('XSS')\">Click me</a>"
+}
+
+{
+  "input": "<img src=\"x\" onerror=\"alert('XSS')\">"
+}
+
+{
+  "input": "<a href='javascript:alert(1)'>Click me</a>"
+}
+
+
+
