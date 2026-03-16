@@ -58,10 +58,11 @@ func main() {
 	// secureMux := mw.Hpp(hppOptions)(rl.Middleware(mw.Compression(mw.ResponseTimeMiddleware(mw.SecurityHeaders(mw.Cors(mux))))))
 	// secureMux := applyMiddlewares(mux, mw.Hpp(hppOptions), mw.Compression, mw.SecurityHeaders, mw.ResponseTimeMiddleware, rl.Middleware, mw.Cors)
 	router := router.MainRouter()
-	jwtMiddleware := mw.MiddlewareExcludePaths(mw.JWTMiddleware, "/execs/login", "/execs/forgot-password", "/execs/reset-password/{reset_code}/")
+	//jwtMiddleware := mw.MiddlewareExcludePaths(mw.JWTMiddleware, "/execs/login", "/execs/forgot-password", "/execs/reset-password/{reset_code}/")
 
-	secureMux := jwtMiddleware(mw.SecurityHeaders(router))
+	//secureMux := jwtMiddleware(mw.SecurityHeaders(router))
 	//secureMux := mw.SecurityHeaders(router)
+	secureMux := mw.XSSMiddleware(router)
 
 	server := &http.Server{
 		Addr: fmt.Sprintf(":%s", port),
